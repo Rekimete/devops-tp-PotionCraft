@@ -1,0 +1,12 @@
+# Ignore Python and editor artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+env/
+.venv/
+venv/
+node_modules/
+.DS_Store
+.idea/
+.vscode/
+
