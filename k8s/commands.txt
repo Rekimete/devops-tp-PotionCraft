@@ -1,0 +1,54 @@
+---
+Instructions (PowerShell) pour déployer dans Kubernetes
+
+REGISTRY : docker.io/rekimete
+
+1) Construire les images Docker (local) et les tagger
+docker build -t docker.io/rekimete/potioncraft-api:latest .\api
+docker build -t docker.io/rekimete/potioncraft-frontend:latest .\frontend
+
+2) Pousser les images vers le registre (assurez-vous d'être connecté)
+docker push docker.io/rekimete/potioncraft-api:latest
+docker push docker.io/rekimete/potioncraft-frontend:latest
+
+3) Créer le namespace
+kubectl apply -f k8s\namespace.yaml
+
+4) Déployer (applique tous les manifests)
+kubectl apply -f k8s\deploy-api.yaml
+kubectl apply -f k8s\service-api.yaml
+kubectl apply -f k8s\deploy-frontend.yaml
+kubectl apply -f k8s\service-frontend.yaml
+
+# Remarque: nous n'utilisons pas d'Ingress ici. Utilisez le port-forwarding ci‑dessous
+
+5) Vérifier les ressources
+kubectl -n potioncraft get all
+
+6) Voir les logs d'un pod (ex : api)
+kubectl -n potioncraft get pods
+kubectl -n potioncraft logs deployment/potioncraft-api
+
+7) Pour tester sans ingress (port-forward depuis votre poste)
+# Frontend
+kubectl -n potioncraft port-forward svc/potioncraft-frontend 8080:80
+# API
+kubectl -n potioncraft port-forward svc/potioncraft-api 8081:80
+
+
+8) Supprimer tout le déploiement
+kubectl delete -f k8s\service-frontend.yaml || true
+kubectl delete -f k8s\deploy-frontend.yaml || true
+kubectl delete -f k8s\service-api.yaml || true
+kubectl delete -f k8s\deploy-api.yaml || true
+kubectl delete -f k8s\namespace.yaml || true
+
+---
+
+Notes et conseils:
+- Si vous utilisez minikube ou kind, préférez charger les images directement (ex: `minikube image load`) ou utilisez `kind load docker-image` pour éviter de pousser vers un registre public.
+- Pour utiliser l'ingress localement avec `potioncraft.local`, ajoutez une entrée dans votre fichier hosts pointant vers l'IP du cluster/ingress (ex: minikube ip) :
+  # 192.168.99.100 potioncraft.local
+- Adaptez `replicas`, `resources` et `probes` dans les manifests selon vos besoins.
+
+

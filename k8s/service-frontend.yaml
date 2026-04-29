@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: potioncraft-frontend
+  namespace: potioncraft
+spec:
+  selector:
+    app: potioncraft-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  # Utilisez LoadBalancer si vous êtes sur un cloud qui le supporte,
+  # ou NodePort pour l'exposer depuis les nœuds.
+  type: ClusterIP
+
