@@ -1,73 +1,235 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PotionCraft</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .potion { margin-bottom: 10px; }
-        .potion h3 { margin: 0; }
-        button { margin-left: 10px; }
+        :root{
+            --bg:#f6f8fb;
+            --card:#ffffff;
+            --primary:#6b46c1;
+            --accent:#9f7aea;
+            --muted:#6b7280;
+            --success:#16a34a;
+            --danger:#dc2626;
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0; font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+            background:var(--bg); color:#0f172a;
+        }
+        header{
+            background:linear-gradient(90deg,var(--primary),var(--accent)); color:white; padding:24px 0; text-align:center;
+            box-shadow: 0 2px 6px rgba(16,24,40,0.06);
+        }
+        header h1{margin:0;font-weight:600}
+        .container{max-width:960px;margin:24px auto;padding:0 16px}
+        .layout{display:grid;grid-template-columns:1fr 360px;gap:20px}
+        @media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+        /* Potions list */
+        .list{display:flex;flex-direction:column;gap:12px}
+        .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 1px 2px rgba(2,6,23,0.06);}
+        .potion-head{display:flex;align-items:center;justify-content:space-between}
+        .potion-title{font-size:18px;margin:0}
+        .potion-meta{color:var(--muted);font-size:13px}
+        .potion-body{margin-top:8px;color:#0f172a}
+
+        /* Form */
+        .form{position:sticky;top:24px}
+        form{background:var(--card);padding:16px;border-radius:12px;display:flex;flex-direction:column;gap:10px}
+        label{font-size:13px;color:var(--muted)}
+        input[type=text], textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;font-size:14px}
+        textarea{min-height:80px}
+        .row{display:flex;gap:8px}
+        .row > *{flex:1}
+        button{background:var(--primary);color:white;border:0;padding:10px 14px;border-radius:8px;cursor:pointer}
+        button.secondary{background:#eef2ff;color:var(--primary);border:1px solid #e6e9ef}
+        button.danger{background:var(--danger)}
+
+        .muted{color:var(--muted);font-size:13px}
+        .empty{padding:24px;text-align:center;color:var(--muted);}
+
+        /* small toast */
+        .toast{position:fixed;right:20px;bottom:20px;background:#111827;color:white;padding:10px 14px;border-radius:8px;opacity:0.95}
+
+        /* spinner */
+        .spinner{width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,0.25);border-top-color:white;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle}
+        @keyframes spin{to{transform:rotate(360deg)}}
     </style>
 </head>
 <body>
-    <h1>PotionCraft</h1>
-    <div id="potions"></div>
+    <header>
+        <h1>PotionCraft</h1>
+        <div class="muted">Gérez vos potions magiques — ajouter, lister, supprimer</div>
+    </header>
 
-    <h2>Ajouter une potion</h2>
-    <form id="addPotionForm">
-        <input type="text" id="name" placeholder="Nom" required />
-        <input type="text" id="ingredients" placeholder="Ingrédients (séparés par des virgules)" required />
-        <input type="text" id="effect" placeholder="Effet" required />
-        <button type="submit">Ajouter</button>
-    </form>
+    <div class="container">
+        <div class="layout">
+            <main>
+                <section class="card">
+                    <h2 style="margin:0 0 8px 0">Liste des potions</h2>
+                    <div id="potions" class="list" aria-live="polite"></div>
+                </section>
+            </main>
+
+            <aside class="form">
+                <form id="addPotionForm">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                        <strong>Ajouter une potion</strong>
+                        <span id="formStatus" class="muted"></span>
+                    </div>
+                    <div>
+                        <label for="name">Nom</label>
+                        <input type="text" id="name" placeholder="Ex : Potion d'invisibilité" required />
+                    </div>
+                    <div>
+                        <label for="ingredients">Ingrédients (séparés par des virgules)</label>
+                        <input type="text" id="ingredients" placeholder="Poudre de fée, Eau de lune" required />
+                    </div>
+                    <div>
+                        <label for="effect">Effet</label>
+                        <textarea id="effect" placeholder="Rend invisible pendant 10 minutes" required></textarea>
+                    </div>
+                    <div class="row">
+                        <button type="submit" id="submitBtn">Ajouter</button>
+                        <button type="button" id="resetBtn" class="secondary">Réinitialiser</button>
+                    </div>
+                </form>
+            </aside>
+        </div>
+    </div>
+
+    <div id="toast" style="display:none" class="toast"></div>
 
     <script>
-        const apiUrl = 'http://localhost:8081/potions';
+        // API URL: adjustable by injecting window.API_URL from environment; fallback to localhost port-forward
+        const apiBase = (window.API_URL && window.API_URL.replace(/\/+$/,'')) || 'http://localhost:8081';
+        const apiUrl = apiBase + '/potions';
 
-        function fetchPotions() {
-            fetch(apiUrl)
-                .then(response => response.json())
-                .then(data => {
-                    const potionsDiv = document.getElementById('potions');
-                    potionsDiv.innerHTML = '';
-                    data.forEach(potion => {
-                        const div = document.createElement('div');
-                        div.className = 'potion';
-                        div.innerHTML = `
-                            <h3>${potion.name}</h3>
-                            <p>Ingrédients: ${potion.ingredients.join(', ')}</p>
-                            <p>Effet: ${potion.effect}</p>
-                            <button onclick="deletePotion(${potion.id})">Supprimer</button>
-                        `;
-                        potionsDiv.appendChild(div);
-                    });
+        const potionsEl = document.getElementById('potions');
+        const form = document.getElementById('addPotionForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const formStatus = document.getElementById('formStatus');
+        const toast = document.getElementById('toast');
+
+        function showToast(msg, timeout=3000){
+            toast.textContent = msg; toast.style.display = 'block';
+            clearTimeout(toast._t);
+            toast._t = setTimeout(()=> toast.style.display='none', timeout);
+        }
+
+        async function fetchPotions(){
+            potionsEl.innerHTML = '<div class="muted">Chargement...</div>';
+            try{
+                const res = await fetch(apiUrl);
+                if(!res.ok) throw new Error('Erreur HTTP ' + res.status);
+                const data = await res.json();
+                renderPotions(data);
+            }catch(err){
+                potionsEl.innerHTML = `<div class="empty">Erreur lors du chargement : ${err.message}</div>`;
+                console.error(err);
+            }
+        }
+
+        function renderPotions(list){
+            if(!Array.isArray(list) || list.length===0){
+                potionsEl.innerHTML = '<div class="empty">Aucune potion trouvée.</div>';
+                return;
+            }
+            potionsEl.innerHTML = '';
+            list.forEach(potion=>{
+                const el = document.createElement('div'); el.className='card';
+                el.innerHTML = `
+                    <div class="potion-head">
+                        <div>
+                            <h3 class="potion-title">${escapeHtml(potion.name)}</h3>
+                            <div class="potion-meta">Ingrédients: ${escapeHtml(potion.ingredients.join(', '))}</div>
+                        </div>
+                        <div style="text-align:right">
+                            <div class="potion-meta">ID ${potion.id}</div>
+                            <div style="margin-top:8px">
+                                <button class="secondary" data-id="${potion.id}">Voir</button>
+                                <button class="danger" data-id="${potion.id}">Supprimer</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="potion-body">${escapeHtml(potion.effect)}</div>
+                `;
+
+                // event delegation for buttons
+                el.querySelectorAll('button').forEach(b=>{
+                    if(b.textContent.trim()==='Supprimer'){
+                        b.addEventListener('click', ()=> onDelete(potion.id));
+                    } else {
+                        b.addEventListener('click', ()=> showToast(potion.effect, 4000));
+                    }
                 });
-        }
 
-        function deletePotion(id) {
-            fetch(`${apiUrl}/${id}`, { method: 'DELETE' })
-                .then(() => fetchPotions());
-        }
-
-        document.getElementById('addPotionForm').addEventListener('submit', event => {
-            event.preventDefault();
-            const name = document.getElementById('name').value;
-            const ingredients = document.getElementById('ingredients').value.split(',');
-            const effect = document.getElementById('effect').value;
-
-            fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, ingredients, effect }),
-            })
-            .then(() => {
-                document.getElementById('addPotionForm').reset();
-                fetchPotions();
+                potionsEl.appendChild(el);
             });
+        }
+
+        function escapeHtml(str){
+            if(!str) return '';
+            return String(str).replace(/[&<>\"']/g, s=>({
+                '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[s]));
+        }
+
+        async function onDelete(id){
+            if(!confirm('Confirmer la suppression de la potion #' + id + ' ?')) return;
+            try{
+                const res = await fetch(`${apiUrl}/${id}`, { method:'DELETE' });
+                if(res.status !== 204 && !res.ok) throw new Error('Impossible de supprimer (code ' + res.status + ')');
+                showToast('Potion supprimée');
+                fetchPotions();
+            }catch(err){
+                showToast('Erreur: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        form.addEventListener('submit', async e=>{
+            e.preventDefault();
+            const name = document.getElementById('name').value.trim();
+            const ingredientsRaw = document.getElementById('ingredients').value;
+            const effect = document.getElementById('effect').value.trim();
+            const ingredients = ingredientsRaw.split(',').map(s=>s.trim()).filter(Boolean);
+
+            if(!name || !ingredients.length || !effect){
+                showToast('Veuillez remplir tous les champs correctement');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            const prev = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner"></span> Envoi...';
+            formStatus.textContent = 'Envoi en cours';
+            try{
+                const res = await fetch(apiUrl, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({ name, ingredients, effect })
+                });
+                if(!res.ok) throw new Error('Erreur HTTP ' + res.status);
+                const newPotion = await res.json();
+                showToast('Potion ajoutée');
+                form.reset();
+                fetchPotions();
+            }catch(err){
+                showToast('Erreur: ' + err.message);
+                console.error(err);
+            }finally{
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = prev;
+                formStatus.textContent = '';
+            }
         });
 
+        resetBtn.addEventListener('click', ()=> form.reset());
+
+        // initial load
         fetchPotions();
     </script>
 </body>
